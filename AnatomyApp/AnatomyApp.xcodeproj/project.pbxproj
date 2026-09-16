@@ -175,6 +175,9 @@
 			);
 			mainGroup = A740BA833040231600B0499D;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A740BAAD3040231800B0499D /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A740BA8D3040231700B0499D /* Products */;
 			projectDirPath = "";
@@ -240,6 +243,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Hand tracking lets you rotate the anatomical heart using your index and middle fingers.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -269,6 +273,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_NSHandsTrackingUsageDescription = "Hand tracking lets you rotate the anatomical heart using your index and middle fingers.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -486,9 +491,17 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		A740BAAD3040231800B0499D /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RealityKitContent;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		A740BA913040231700B0499D /* RealityKitContent */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = A740BAAD3040231800B0499D /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */;
 			productName = RealityKitContent;
 		};
 /* End XCSwiftPackageProductDependency section */

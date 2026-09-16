@@ -1,51 +1,43 @@
-//
-//  ContentView.swift
-//  AnatomyApp
-//
-//  Created by Interactive 3D Design Group on 27/8/26.
-//
-
 import SwiftUI
-import RealityKit
-import RealityKitContent
 
 struct ContentView: View {
-
-    @State var enlarge = false
+    @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+    @Environment(\.dismissWindow) private var dismissWindow
+    @State private var openingResult: OpenImmersiveSpaceAction.Result?
 
     var body: some View {
-        VStack {
-            RealityView { content in
-                // Add the initial RealityKit content
-                if let scene = try? await Entity(named: "Scene", in: realityKitContentBundle) {
-                    content.add(scene)
-                }
-            } update: { content in
-                // Update the RealityKit content when SwiftUI state changes
-                if let scene = content.entities.first {
-                    let uniformScale: Float = enlarge ? 1.4 : 1.0
-                    scene.transform.scale = [uniformScale, uniformScale, uniformScale]
-                }
-            }
-            .gesture(TapGesture().targetedToAnyEntity().onEnded { _ in
-                enlarge.toggle()
-            })
+        VStack(spacing: 16) {
+            Text("Interactive Heart")
+                .font(.title)
 
-            VStack {
-                Button {
-                    enlarge.toggle()
-                } label: {
-                    Text(enlarge ? "Reduce RealityView Content" : "Enlarge RealityView Content")
+            Text("Bring your index and middle fingertips together to rotate the heart.")
+                .multilineTextAlignment(.center)
+
+            if openingResult == .error {
+                Button("Enter Anatomy Space") {
+                    Task {
+                        await enterAnatomySpace()
+                    }
                 }
-                .animation(.none, value: 0)
-                .fontWeight(.semibold)
             }
-            .padding()
-            .glassBackgroundEffect()
+        }
+        .padding(32)
+        .task {
+            guard openingResult == nil else { return }
+            await enterAnatomySpace()
+        }
+    }
+
+    private func enterAnatomySpace() async {
+        let result = await openImmersiveSpace(id: "AnatomySpace")
+        openingResult = result
+
+        if result == .opened {
+            dismissWindow(id: "Launcher")
         }
     }
 }
 
-#Preview(windowStyle: .volumetric) {
+#Preview {
     ContentView()
 }

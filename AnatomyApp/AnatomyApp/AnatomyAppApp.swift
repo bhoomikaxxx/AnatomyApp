@@ -1,18 +1,17 @@
-//
-//  AnatomyAppApp.swift
-//  AnatomyApp
-//
-//  Created by Interactive 3D Design Group on 27/8/26.
-//
-
 import SwiftUI
 
 @main
 struct AnatomyAppApp: App {
+    @State private var immersionStyle: ImmersionStyle = .mixed
+
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "Launcher") {
             ContentView()
         }
-        .windowStyle(.volumetric)
+
+        ImmersiveSpace(id: "AnatomySpace") {
+            ImmersiveView()
+        }
+        .immersionStyle(selection: $immersionStyle, in: .mixed)
     }
 }
