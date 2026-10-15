@@ -14,8 +14,15 @@ struct ClinicalMixMatchView: View {
     @State private var answer = ""
     @State private var feedback = ""
     @State private var matchedPartNames: Set<String> = []
+    @State private var targetGuide: Entity?
     @State private var subscriptions: [EventSubscription] = []
+    @State private var scaleMultiplier = 1.0
+    @State private var magnificationRotatedEntity: Entity?
+    @State private var magnificationStartOrientation: simd_quatf?
     @FocusState private var answerFieldIsFocused: Bool
+
+    private let baseHeartScale: Float = 4.5
+    private let interfaceScale: Float = 0.7
 
     var body: some View {
         RealityView { content, attachments in
@@ -25,25 +32,41 @@ struct ClinicalMixMatchView: View {
                     in: realityKitContentBundle
                 )
                 heart.position = [0, 1.25, -0.75]
-                heart.scale = SIMD3(repeating: 4.5)
+                heart.scale = SIMD3(repeating: baseHeartScale)
+                content.add(heart)
 
                 let parts = makeClinicalParts(from: heart)
+                let targetGuide = makeTargetGuide(for: heart)
+                content.add(targetGuide)
+
                 for part in parts {
                     ManipulationComponent.configureEntity(part.entity)
                     part.entity.components.set(HoverEffectComponent())
                     part.entity.isEnabled = false
                 }
 
-                content.add(heart)
-
                 if let header = attachments.entity(for: "ClinicalHeader") {
                     header.position = [0, 1.72, -0.75]
+                    header.scale = SIMD3(repeating: interfaceScale)
                     content.add(header)
                 }
 
-                if let panel = attachments.entity(for: "ClinicalPanel") {
-                    panel.position = [0.74, 1.3, -0.75]
-                    content.add(panel)
+                if let questionPanel = attachments.entity(for: "ClinicalQuestionPanel") {
+                    questionPanel.position = [0.68, 1.24, -0.75]
+                    questionPanel.scale = SIMD3(repeating: interfaceScale)
+                    content.add(questionPanel)
+                }
+
+                if let actionPanel = attachments.entity(for: "ClinicalActionPanel") {
+                    actionPanel.position = [0, 0.68, -0.68]
+                    actionPanel.scale = SIMD3(repeating: interfaceScale)
+                    content.add(actionPanel)
+                }
+
+                if let scaleControl = attachments.entity(for: "ScaleControl") {
+                    scaleControl.position = [0, 0.38, -0.68]
+                    scaleControl.scale = SIMD3(repeating: interfaceScale)
+                    content.add(scaleControl)
                 }
 
                 let subscription = content.subscribe(
@@ -56,6 +79,7 @@ struct ClinicalMixMatchView: View {
 
                 self.heart = heart
                 self.parts = parts
+                self.targetGuide = targetGuide
                 subscriptions = [subscription]
                 showCurrentNamingPart(in: parts)
             } catch {
@@ -81,18 +105,104 @@ struct ClinicalMixMatchView: View {
                 .glassBackgroundEffect()
             }
 
-            Attachment(id: "ClinicalPanel") {
-                clinicalPanel
+            Attachment(id: "ClinicalQuestionPanel") {
+                clinicalQuestionPanel
+            }
+
+            Attachment(id: "ClinicalActionPanel") {
+                clinicalActionPanel
+            }
+
+            Attachment(id: "ScaleControl") {
+                scaleControl
             }
         }
+        .simultaneousGesture(magnificationRotationGesture)
         .onDisappear {
             subscriptions.removeAll()
         }
     }
 
+    private var scaleControl: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("Scale")
+                    .font(.title2.bold())
+
+                Spacer()
+
+                Text(scaleMultiplier, format: .number.precision(.fractionLength(1)))
+                    .font(.title2.monospacedDigit().bold())
+                + Text("×")
+                    .font(.title2.bold())
+            }
+
+            Slider(value: $scaleMultiplier, in: 1...5)
+                .frame(width: 420)
+                .onChange(of: scaleMultiplier) { _, newValue in
+                    heart?.scale = SIMD3(
+                        repeating: baseHeartScale * Float(newValue)
+                    )
+                }
+
+            HStack {
+                Text("1×")
+                Spacer()
+                Text("5×")
+            }
+            .font(.headline)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .glassBackgroundEffect()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Heart scale")
+    }
+
+    private var magnificationRotationGesture: some Gesture {
+        MagnifyGesture()
+            .targetedToAnyEntity()
+            .onChanged { value in
+                guard let entityToRotate = clinicalTransformTarget(for: value.entity) else {
+                    return
+                }
+
+                if magnificationRotatedEntity !== entityToRotate {
+                    magnificationRotatedEntity = entityToRotate
+                    magnificationStartOrientation = entityToRotate.orientation
+                }
+
+                guard let magnificationStartOrientation else { return }
+
+                let turn = Float(value.gestureValue.magnification - 1) * 2 * .pi
+                let delta = simd_quatf(angle: turn, axis: [0, 1, 0])
+                entityToRotate.orientation = simd_normalize(
+                    delta * magnificationStartOrientation
+                )
+            }
+            .onEnded { _ in
+                magnificationRotatedEntity = nil
+                magnificationStartOrientation = nil
+            }
+    }
+
+    private func clinicalTransformTarget(for targetedEntity: Entity) -> Entity? {
+        parts.first { part in
+            var current: Entity? = targetedEntity
+            while let candidate = current {
+                if candidate === part.entity {
+                    return true
+                }
+                current = candidate.parent
+            }
+            return false
+        }?.entity
+    }
+
     @ViewBuilder
-    private var clinicalPanel: some View {
-        VStack(spacing: 18) {
+    private var clinicalQuestionPanel: some View {
+        Group {
             switch phase {
             case .naming:
                 namingPanel
@@ -101,40 +211,70 @@ struct ClinicalMixMatchView: View {
             case .complete:
                 completionPanel
             }
-
-            Button {
-                returnToClinicalMenu()
-            } label: {
-                Label("Back to Clinical Cases", systemImage: "chevron.backward")
-                    .frame(width: 300, height: 58)
-            }
-            .buttonStyle(.bordered)
         }
         .font(.title3)
         .padding(24)
         .glassBackgroundEffect()
     }
 
-    private var namingPanel: some View {
+    @ViewBuilder
+    private var clinicalActionPanel: some View {
         VStack(spacing: 16) {
+            if phase == .naming {
+                HStack(spacing: 24) {
+                    Button(action: checkAnswer) {
+                        Label("Answer", systemImage: "checkmark.circle.fill")
+                            .frame(width: 340, height: 100)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+
+                    Button(action: skipCurrentPart) {
+                        Label("Skip", systemImage: "forward.end.fill")
+                            .frame(width: 340, height: 100)
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .font(.system(size: 34, weight: .bold))
+                .controlSize(.extraLarge)
+            }
+
+            Button {
+                returnToClinicalMenu()
+            } label: {
+                Label("Back to Clinical Cases", systemImage: "chevron.backward")
+                    .frame(width: 300, height: 52)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(22)
+        .glassBackgroundEffect()
+    }
+
+    private var namingPanel: some View {
+        VStack(spacing: 20) {
             Text("Identify This Structure")
-                .font(.title.bold())
+                .font(.system(size: 42, weight: .bold, design: .rounded))
 
             Text("Part \(min(currentPartIndex + 1, parts.count)) of \(parts.count)")
+                .font(.title2.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             Text(maskedPartName)
-                .font(.system(size: 27, weight: .bold, design: .monospaced))
-                .tracking(3)
+                .font(.system(size: 38, weight: .bold, design: .monospaced))
+                .tracking(4)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
+                .frame(maxWidth: 520)
 
             TextField("Type the anatomical name", text: $answer)
+                .font(.title2)
                 .textFieldStyle(.roundedBorder)
                 .textInputAutocapitalization(.words)
                 .autocorrectionDisabled()
                 .focused($answerFieldIsFocused)
-                .frame(width: 380)
+                .frame(width: 520, height: 64)
                 .onSubmit(checkAnswer)
 
             if !feedback.isEmpty {
@@ -142,11 +282,6 @@ struct ClinicalMixMatchView: View {
                     .font(.headline)
                     .foregroundStyle(feedback == "Correct!" ? .green : .orange)
             }
-
-            Button("Check Answer", action: checkAnswer)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.extraLarge)
-                .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .onAppear {
             answerFieldIsFocused = true
@@ -190,8 +325,24 @@ struct ClinicalMixMatchView: View {
     }
 
     private var maskedPartName: String {
-        currentPartName.map { character in
-            character == " " ? "   " : "_ "
+        let typedCharacters = answer.filter {
+            $0.isLetter || $0.isNumber
+        }
+        var typedIterator = typedCharacters.makeIterator()
+
+        return currentPartName.map { expectedCharacter in
+            if expectedCharacter.isWhitespace {
+                return "   "
+            }
+
+            if expectedCharacter.isLetter || expectedCharacter.isNumber {
+                let displayedCharacter = typedIterator.next().map {
+                    String($0).uppercased()
+                } ?? "_"
+                return "\(displayedCharacter) "
+            }
+
+            return "\(expectedCharacter) "
         }.joined()
     }
 
@@ -215,6 +366,15 @@ struct ClinicalMixMatchView: View {
 
         feedback = "Correct!"
 
+        advanceToNextPart()
+    }
+
+    private func skipCurrentPart() {
+        feedback = ""
+        advanceToNextPart()
+    }
+
+    private func advanceToNextPart() {
         if currentPartIndex + 1 < parts.count {
             parts[currentPartIndex].entity.isEnabled = false
             currentPartIndex += 1
@@ -232,14 +392,19 @@ struct ClinicalMixMatchView: View {
         phase = .matching
         answer = ""
         feedback = ""
+        targetGuide?.isEnabled = true
 
         for (index, part) in parts.enumerated() {
             part.entity.isEnabled = true
             part.entity.stopAllAnimations(recursive: false)
-
-            var scrambledTransform = part.originalTransform
-            scrambledTransform.translation += scrambleOffset(at: index)
-            part.entity.components[Transform.self] = scrambledTransform
+            part.entity.components[Transform.self] = part.originalTransform
+            part.entity.setPosition(
+                part.originalWorldPosition + randomRoomOffset(
+                    at: index,
+                    count: parts.count
+                ),
+                relativeTo: nil
+            )
 
             var manipulation = ManipulationComponent()
             manipulation.releaseBehavior = .stay
@@ -255,11 +420,12 @@ struct ClinicalMixMatchView: View {
         }
 
         let distance = simd_distance(
-            entity.position,
-            part.originalTransform.translation
+            entity.position(relativeTo: nil),
+            part.originalWorldPosition
         )
 
-        guard distance <= 0.1 else { return }
+        // World-space metres make this snap zone independent of model scale.
+        guard distance <= 0.3 else { return }
 
         entity.components.remove(ManipulationComponent.self)
         entity.move(
@@ -272,6 +438,7 @@ struct ClinicalMixMatchView: View {
 
         if matchedPartNames.count == parts.count {
             phase = .complete
+            targetGuide?.isEnabled = false
         }
     }
 
@@ -290,7 +457,8 @@ struct ClinicalMixMatchView: View {
                     ClinicalHeartPart(
                         name: name,
                         entity: entity,
-                        originalTransform: entity.transform
+                        originalTransform: entity.transform,
+                        originalWorldPosition: entity.position(relativeTo: nil)
                     )
                 )
             }
@@ -302,6 +470,87 @@ struct ClinicalMixMatchView: View {
 
         visit(root)
         return parts.sorted { $0.name < $1.name }
+    }
+
+    private func makeTargetGuide(for heart: Entity) -> Entity {
+        let bounds = heart.visualBounds(
+            recursive: true,
+            relativeTo: nil,
+            excludeInactive: false
+        )
+        let size = bounds.extents + SIMD3<Float>(repeating: 0.12)
+        let thickness: Float = 0.018
+
+        var edgeMaterial = UnlitMaterial(color: .cyan)
+        edgeMaterial.blending = .transparent(
+            opacity: .init(floatLiteral: 0.78)
+        )
+
+        var fillMaterial = UnlitMaterial(color: .cyan)
+        fillMaterial.blending = .transparent(
+            opacity: .init(floatLiteral: 0.035)
+        )
+
+        let guide = Entity()
+        guide.name = "Heart Rebuild Target"
+        guide.position = bounds.center
+        guide.isEnabled = false
+
+        let fill = ModelEntity(
+            mesh: .generateBox(size: size, cornerRadius: 0.035),
+            materials: [fillMaterial]
+        )
+        guide.addChild(fill)
+
+        func addEdge(size edgeSize: SIMD3<Float>, position: SIMD3<Float>) {
+            let edge = ModelEntity(
+                mesh: .generateBox(size: edgeSize, cornerRadius: thickness / 2),
+                materials: [edgeMaterial]
+            )
+            edge.position = position
+            guide.addChild(edge)
+        }
+
+        for ySign: Float in [-1, 1] {
+            for zSign: Float in [-1, 1] {
+                addEdge(
+                    size: [size.x, thickness, thickness],
+                    position: [
+                        0,
+                        ySign * size.y / 2,
+                        zSign * size.z / 2
+                    ]
+                )
+            }
+        }
+
+        for xSign: Float in [-1, 1] {
+            for zSign: Float in [-1, 1] {
+                addEdge(
+                    size: [thickness, size.y, thickness],
+                    position: [
+                        xSign * size.x / 2,
+                        0,
+                        zSign * size.z / 2
+                    ]
+                )
+            }
+        }
+
+        for xSign: Float in [-1, 1] {
+            for ySign: Float in [-1, 1] {
+                addEdge(
+                    size: [thickness, thickness, size.z],
+                    position: [
+                        xSign * size.x / 2,
+                        ySign * size.y / 2,
+                        0
+                    ]
+                )
+            }
+        }
+
+        return guide
     }
 
     private func anatomicalName(for entity: Entity) -> String? {
@@ -327,18 +576,16 @@ struct ClinicalMixMatchView: View {
         }
     }
 
-    private func scrambleOffset(at index: Int) -> SIMD3<Float> {
-        let offsets: [SIMD3<Float>] = [
-            [-0.42, 0.28, -0.18],
-            [0.44, 0.24, 0.16],
-            [-0.34, -0.24, 0.2],
-            [0.36, -0.28, -0.18],
-            [-0.18, 0.46, 0.22],
-            [0.2, 0.48, -0.2],
-            [-0.48, 0.02, -0.24],
-            [0.5, 0.04, 0.24]
+    private func randomRoomOffset(at index: Int, count: Int) -> SIMD3<Float> {
+        let sectionAngle = (Float(index) / Float(max(count, 1))) * 2 * .pi
+        let angle = sectionAngle + Float.random(in: -0.28...0.28)
+        let radius = Float.random(in: 1.35...2.1)
+
+        return [
+            cos(angle) * radius,
+            Float.random(in: -0.55...0.8),
+            Float.random(in: -0.75...0.2)
         ]
-        return offsets[index % offsets.count]
     }
 
     private func normalize(_ value: String) -> String {
@@ -365,4 +612,5 @@ private struct ClinicalHeartPart {
     let name: String
     let entity: Entity
     let originalTransform: Transform
+    let originalWorldPosition: SIMD3<Float>
 }
