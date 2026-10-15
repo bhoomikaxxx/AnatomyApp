@@ -60,3 +60,10 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Finder
+.DS_Store
+
+# Local build output (DerivedData belongs in /tmp — see CLAUDE.md)
+DerivedData/
+build/

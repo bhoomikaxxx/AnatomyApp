@@ -1,0 +1,57 @@
+name: CI
+
+# Guards for a repo with no real tests yet (KNOWN_ISSUES #3):
+#   version — every build configuration carries one aligned version (scripts/version.sh).
+#   build   — the visionOS app builds for the simulator with the exact CLAUDE.md command.
+#             Needs a runner Xcode with a visionOS simulator SDK that supports the deploy
+#             target; hosted images can lag Xcode releases, so this job may SKIP (with a
+#             warning), never lie.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push supersedes a running build of the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    name: version aligned
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # verify reports the last tag
+      - run: bash scripts/version.sh verify
+
+  build:
+    name: build visionOS app (simulator)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select newest Xcode on the runner
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: Guard — visionOS simulator SDK present?
+        id: sdk
+        run: |
+          if xcodebuild -showsdks 2>/dev/null | grep -q xrsimulator; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::No visionOS simulator SDK on this runner image — build skipped (not failed)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build
+        if: steps.sdk.outputs.ok == 'true'
+        run: |
+          xcodebuild build -project AnatomyApp/AnatomyApp.xcodeproj -scheme AnatomyApp \
+            -destination 'generic/platform=visionOS Simulator' -derivedDataPath /tmp/anatomy-dd-vision \
+            CODE_SIGNING_ALLOWED=NO > /tmp/build.log 2>&1 && rc=0 || rc=$?   # the step shell is bash -e
+          # Compiler errors print long before the summary — surface them as annotations first.
+          grep -E "(error|fatal error): " /tmp/build.log | sort -u | head -40 | sed 's/^/::error::/'
+          tail -30 /tmp/build.log
+          exit $rc
