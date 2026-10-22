@@ -7,117 +7,138 @@ struct HeartDeformityView: View {
     @Environment(\.openWindow) private var openWindow
     @Binding var launcherPage: LauncherPage
 
-    private let heartScale: Float = 3.2
-    private let interfaceScale: Float = 0.7
+    private let heartScale: Float = 0.28
+    private let interfaceScale: Float = 0.58
 
     var body: some View {
         RealityView { content, attachments in
             do {
-                let referenceHeart = try await makeHighlightedHeart()
-                referenceHeart.position = [-0.43, 1.25, -0.8]
-                referenceHeart.scale = SIMD3(repeating: heartScale)
-                content.add(referenceHeart)
+                let normalHeart = try await Entity(
+                    named: "normalDextocardia",
+                    in: realityKitContentBundle
+                )
+                normalHeart.position = [-0.3, 0.98, -0.8]
+                normalHeart.scale = SIMD3(repeating: heartScale)
+                content.add(normalHeart)
 
-                let deformityHeart = try await makeHighlightedHeart()
-                deformityHeart.position = [0.43, 1.25, -0.8]
-                deformityHeart.scale = SIMD3(repeating: heartScale)
-                content.add(deformityHeart)
+                let dextrocardiaHeart = try await Entity(
+                    named: "Dextocardia",
+                    in: realityKitContentBundle
+                )
+                dextrocardiaHeart.position = [-0.14, 0.98, -0.8]
+                dextrocardiaHeart.scale = SIMD3(repeating: heartScale)
+                content.add(dextrocardiaHeart)
 
-                if let header = attachments.entity(for: "DeformityHeader") {
-                    header.position = [0, 1.78, -0.8]
-                    header.scale = SIMD3(repeating: interfaceScale)
-                    content.add(header)
-                }
-
-                if let labels = attachments.entity(for: "HeartLabels") {
-                    labels.position = [0, 0.72, -0.72]
-                    labels.scale = SIMD3(repeating: interfaceScale)
-                    content.add(labels)
-                }
+                addAttachment(
+                    named: "DeformityHeader",
+                    at: [-0.22, 1.35, -0.8],
+                    to: content,
+                    attachments: attachments
+                )
+                addAttachment(
+                    named: "NormalLabel",
+                    at: [-0.3, 1.29, -0.72],
+                    to: content,
+                    attachments: attachments
+                )
+                addAttachment(
+                    named: "DextrocardiaLabel",
+                    at: [-0.14, 1.29, -0.72],
+                    to: content,
+                    attachments: attachments
+                )
+                addAttachment(
+                    named: "DeformityDetails",
+                    at: [-0.22, 0.88, -0.72],
+                    to: content,
+                    attachments: attachments
+                )
+                addAttachment(
+                    named: "AITutor",
+                    at: [0.18, 1.08, -0.72],
+                    to: content,
+                    attachments: attachments
+                )
             } catch {
-                print("Unable to load deformity comparison hearts: \(error)")
+                print("Unable to load Dextrocardia comparison hearts: \(error)")
             }
         } attachments: {
             Attachment(id: "DeformityHeader") {
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     Text("HEART AND DEFORMITIES")
                         .font(.headline.weight(.semibold))
                         .tracking(2.5)
                         .foregroundStyle(.secondary)
 
-                    Text("Deformity")
-                        .font(.system(size: 46, weight: .bold, design: .rounded))
-
-                    Text("The same exterior structure is highlighted on both hearts.")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
+                    Text("Dextrocardia")
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
                 }
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 38)
-                .padding(.vertical, 22)
+                .padding(.horizontal, 30)
+                .padding(.vertical, 16)
                 .glassBackgroundEffect()
             }
 
-            Attachment(id: "HeartLabels") {
-                VStack(spacing: 18) {
-                    HStack(spacing: 180) {
-                        Text("Reference Heart")
-                        Text("Deformity")
-                    }
-                    .font(.title2.bold())
+            Attachment(id: "NormalLabel") {
+                modelLabel("Normal")
+            }
+
+            Attachment(id: "DextrocardiaLabel") {
+                modelLabel("Dextrocardia")
+            }
+
+            Attachment(id: "DeformityDetails") {
+                VStack(spacing: 14) {
+                    Text(TimelineChatContext.dextrocardiaDescription)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 720)
+
+                    Divider()
 
                     Button {
                         returnToDeformities()
                     } label: {
                         Label("Back to Deformities", systemImage: "chevron.backward")
-                            .frame(width: 300, height: 52)
+                            .frame(width: 260, height: 44)
                     }
                     .buttonStyle(.bordered)
                 }
-                .padding(22)
+                .padding(.horizontal, 26)
+                .padding(.vertical, 16)
                 .glassBackgroundEffect()
             }
-        }
-    }
 
-    private func makeHighlightedHeart() async throws -> Entity {
-        let heart = try await Entity(
-            named: "heart",
-            in: realityKitContentBundle
-        )
-
-        if let exteriorPart = firstModelEntity(
-            in: heart,
-            withParentNamed: "polySurface3"
-        ) {
-            var highlightMaterial = PhysicallyBasedMaterial()
-            highlightMaterial.baseColor = .init(tint: .cyan)
-            highlightMaterial.roughness = 0.2
-            highlightMaterial.metallic = 0.1
-            highlightMaterial.emissiveColor = .init(color: .cyan)
-            highlightMaterial.emissiveIntensity = 3
-            exteriorPart.components[ModelComponent.self]?.materials = [highlightMaterial]
-        }
-
-        return heart
-    }
-
-    private func firstModelEntity(
-        in root: Entity,
-        withParentNamed parentName: String
-    ) -> ModelEntity? {
-        if root.parent?.name == parentName,
-           let modelEntity = root as? ModelEntity {
-            return modelEntity
-        }
-
-        for child in root.children {
-            if let match = firstModelEntity(in: child, withParentNamed: parentName) {
-                return match
+            Attachment(id: "AITutor") {
+                GeminiChatView(
+                    selectedAge: "Dextrocardia",
+                    developmentalContext: TimelineChatContext.dextrocardiaDescription
+                )
+                .frame(width: 440, height: 600)
             }
         }
+    }
 
-        return nil
+    private func modelLabel(_ title: LocalizedStringKey) -> some View {
+        Text(title)
+            .font(.title3.bold())
+            .padding(.horizontal, 18)
+            .padding(.vertical, 9)
+            .glassBackgroundEffect()
+    }
+
+    private func addAttachment(
+        named name: String,
+        at position: SIMD3<Float>,
+        to content: RealityViewContent,
+        attachments: RealityViewAttachments
+    ) {
+        guard let attachment = attachments.entity(for: name) else { return }
+        attachment.position = position
+        attachment.scale = SIMD3(repeating: interfaceScale)
+        content.add(attachment)
     }
 
     private func returnToDeformities() {
