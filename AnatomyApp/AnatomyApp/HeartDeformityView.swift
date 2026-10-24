@@ -6,12 +6,52 @@ struct HeartDeformityView: View {
     @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
     @Environment(\.openWindow) private var openWindow
     @Binding var launcherPage: LauncherPage
+    @State private var modelLoadMessage: String? = "Loading heart models…"
 
     private let heartScale: Float = 0.28
     private let interfaceScale: Float = 0.58
 
     var body: some View {
         RealityView { content, attachments in
+            addAttachment(
+                named: "DeformityHeader",
+                at: [-0.22, 1.35, -0.8],
+                to: content,
+                attachments: attachments
+            )
+            addAttachment(
+                named: "NormalLabel",
+                at: [-0.3, 1.29, -0.72],
+                to: content,
+                attachments: attachments
+            )
+            addAttachment(
+                named: "DextrocardiaLabel",
+                at: [-0.14, 1.29, -0.72],
+                to: content,
+                attachments: attachments
+            )
+            addAttachment(
+                named: "DeformityDetails",
+                at: [-0.22, 0.88, -0.72],
+                to: content,
+                attachments: attachments
+            )
+            addAttachment(
+                named: "AITutor",
+                at: [0.18, 1.08, -0.72],
+                to: content,
+                attachments: attachments
+            )
+            addAttachment(
+                named: "ModelLoadStatus",
+                at: [-0.22, 0.68, -0.72],
+                to: content,
+                attachments: attachments
+            )
+
+            var failedModels: [String] = []
+
             do {
                 let normalHeart = try await Entity(
                     named: "normalDextocardia",
@@ -20,7 +60,12 @@ struct HeartDeformityView: View {
                 normalHeart.position = [-0.3, 0.98, -0.8]
                 normalHeart.scale = SIMD3(repeating: heartScale)
                 content.add(normalHeart)
+            } catch {
+                failedModels.append("normal heart")
+                print("Unable to load normalDextocardia.usdz: \(error)")
+            }
 
+            do {
                 let dextrocardiaHeart = try await Entity(
                     named: "Dextocardia",
                     in: realityKitContentBundle
@@ -28,40 +73,14 @@ struct HeartDeformityView: View {
                 dextrocardiaHeart.position = [-0.14, 0.98, -0.8]
                 dextrocardiaHeart.scale = SIMD3(repeating: heartScale)
                 content.add(dextrocardiaHeart)
-
-                addAttachment(
-                    named: "DeformityHeader",
-                    at: [-0.22, 1.35, -0.8],
-                    to: content,
-                    attachments: attachments
-                )
-                addAttachment(
-                    named: "NormalLabel",
-                    at: [-0.3, 1.29, -0.72],
-                    to: content,
-                    attachments: attachments
-                )
-                addAttachment(
-                    named: "DextrocardiaLabel",
-                    at: [-0.14, 1.29, -0.72],
-                    to: content,
-                    attachments: attachments
-                )
-                addAttachment(
-                    named: "DeformityDetails",
-                    at: [-0.22, 0.88, -0.72],
-                    to: content,
-                    attachments: attachments
-                )
-                addAttachment(
-                    named: "AITutor",
-                    at: [0.18, 1.08, -0.72],
-                    to: content,
-                    attachments: attachments
-                )
             } catch {
-                print("Unable to load Dextrocardia comparison hearts: \(error)")
+                failedModels.append("dextrocardia heart")
+                print("Unable to load Dextocardia.usdz: \(error)")
             }
+
+            modelLoadMessage = failedModels.isEmpty
+                ? nil
+                : "Could not load the \(failedModels.joined(separator: " and "))."
         } attachments: {
             Attachment(id: "DeformityHeader") {
                 VStack(spacing: 10) {
@@ -117,6 +136,17 @@ struct HeartDeformityView: View {
                     developmentalContext: TimelineChatContext.dextrocardiaDescription
                 )
                 .frame(width: 440, height: 600)
+            }
+
+            Attachment(id: "ModelLoadStatus") {
+                if let modelLoadMessage {
+                    Label(modelLoadMessage, systemImage: "exclamationmark.triangle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .glassBackgroundEffect()
+                }
             }
         }
     }

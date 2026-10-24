@@ -12,6 +12,7 @@ struct AnatomyAppApp: App {
                 page: $launcherPage,
                 chatContext: timelineChatContext
             )
+            .preferredWindowClippingMargins(.all, 300)
         }
         .windowStyle(.volumetric)
         .defaultSize(width: 1_000, height: 700, depth: 300)

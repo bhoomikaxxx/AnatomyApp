@@ -24,32 +24,32 @@ struct ContentView: View {
         TimelineStage(
             age: "18 days",
             description: "The cardiogenic area forms near the head end of the embryo. Cardiac precursor cells begin organising, and primitive blood vessels start developing around the embryo.",
-            assetName: "day18"
+            assetName: "stage 0 - 18 days"
         ),
         TimelineStage(
             age: "19 days",
             description: "The cardiogenic cells continue organising into paired endocardial tubes as the early cardiovascular system develops.",
-            assetName: "day19"
+            assetName: nil
         ),
         TimelineStage(
             age: "20 days",
             description: "Two endocardial tubes form on either side of the embryo. Early blood flow begins through these paired tubes as the cardiovascular system starts functioning.",
-            assetName: "day20"
+            assetName: "newd20CrossSection"
         ),
         TimelineStage(
             age: "21 days",
             description: "Embryonic folding brings the two endocardial tubes together, and they begin fusing into a single primitive heart tube along the midline.",
-            assetName: "day21"
+            assetName: "stage 2 - 21 days"
         ),
         TimelineStage(
             age: "22 days",
             description: "The primitive heart tube is established. Distinct regions such as the truncus arteriosus, bulbus cordis, primitive ventricle, and primitive atrium can be identified, and the heart is already contracting.",
-            assetName: "day22"
+            assetName: "stage 3 - 22 days"
         ),
         TimelineStage(
             age: "23 days",
             description: "The heart tube starts cardiac looping. The ventricular region moves forward and to the right, while the atrial region begins shifting backward and upward.",
-            assetName: "day23"
+            assetName: "stage 4 - 23 days"
         ),
         TimelineStage(
             age: "24 days",
@@ -236,7 +236,7 @@ struct ContentView: View {
                         ContentUnavailableView(
                             "Yet to be added",
                             systemImage: "cube.transparent",
-                            description: Text("The 35-day heart model is not available yet.")
+                            description: Text("The \(selectedTimelineStage.age) heart model is not available yet.")
                         )
                     }
                 }
@@ -280,7 +280,7 @@ struct ContentView: View {
                 Text("Scale")
                     .font(.headline)
 
-                Slider(value: $timelineScale, in: 1...5)
+                Slider(value: $timelineScale, in: 1...2.5)
                     .frame(maxWidth: 420)
                     .accessibilityLabel("Heart model scale")
 
@@ -298,6 +298,8 @@ struct ContentView: View {
         VStack(spacing: 10) {
             Text("Cross Section")
                 .font(.headline)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .multilineTextAlignment(.center)
 
             Text(crossSectionPercentage / 100, format: .percent.precision(.fractionLength(0)))
@@ -307,7 +309,7 @@ struct ContentView: View {
                 .frame(width: 44, height: 120)
         }
         .padding(16)
-        .frame(width: 140)
+        .frame(width: 180)
         .glassBackgroundEffect()
     }
 
@@ -328,6 +330,8 @@ struct ContentView: View {
                             ? "arrow.down.right.and.arrow.up.left"
                             : "arrow.up.left.and.arrow.down.right"
                     )
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -338,11 +342,11 @@ struct ContentView: View {
                 )
             }
             .padding(16)
-            .frame(width: 160)
+            .frame(width: 180)
             .glassBackgroundEffect()
         } else {
             Color.clear
-                .frame(width: 160)
+                .frame(width: 180)
         }
     }
 
@@ -683,8 +687,7 @@ private struct TimelineRealityModelView: View {
         }
 
         do {
-            let resourceFolder = name.hasPrefix("day") ? "after" : "bfore"
-            let resourceName = "\(resourceFolder)/\(name)"
+            let resourceName = "bfore/\(name)"
             let loadedEntity = try await Entity(
                 named: resourceName,
                 in: realityKitContentBundle
@@ -808,7 +811,7 @@ private struct TimelineRealityModelView: View {
     }
 
     private func makeExplodableParts(from root: Entity) -> [TimelineExplodablePart] {
-        if assetName == "day20" {
+        if assetName == "stage 1 - 20 days" {
             let tubeNames = [
                 "Left_Heart_tube_and_blood_cells",
                 "Right_Heart_tube_and_blood_cells"
@@ -1010,6 +1013,8 @@ private struct TimelineCrossSectionFallback: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(visionOS 27.0, *) {
+            content
+        } else if percentage >= 99.9 {
             content
         } else {
             content.mask(alignment: .bottom) {
